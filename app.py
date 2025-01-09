@@ -78,13 +78,24 @@ def _add_user(con: sqlite3.Connection, username: str, pw_hash: str):
 
 def get_authenticated_user(username: str, password: str) -> User:
     pw_hash = _hash(password)
-    return _get_authenticated_user(get_user_db(), username, pw_hash)
-
+    # return _get_authenticated_user(get_user_db(), username, pw_hash)
+    return _bad_get_authenticated_user(get_user_db(), username, pw_hash)
 
 def _get_authenticated_user(con, username: str, pw_hash: str) -> User:
     res = con.cursor().execute("""
         SELECT id, username, pw_hash FROM user WHERE username = ? AND pw_hash = ? ;
         """, (username, pw_hash))
+    row = res.fetchone()
+    if row is not None:
+        (res_id, res_username, res_pw_hash) = row
+        return User(res_id, res_username, res_pw_hash)
+    else:
+        raise ValueError("Could not authenticate user.")
+
+def _bad_get_authenticated_user(con, username: str, pw_hash: str):
+    vulnerable_raw_sql ="SELECT id, username, pw_hash FROM user WHERE username = '" + username + "' AND pw_hash = '" + pw_hash + "';"
+    print(f"Executing vulnerable raw SQL:\n{vulnerable_raw_sql}")
+    res = con.cursor().execute(vulnerable_raw_sql)
     row = res.fetchone()
     if row is not None:
         (res_id, res_username, res_pw_hash) = row
