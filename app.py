@@ -17,11 +17,6 @@ class User:
     pw_hash: str
 
 
-def create_flask_app() -> Flask:
-    app = Flask(__name__, static_url_path='', static_folder="static")
-    with app.app_context():
-        pass
-    return app
 
 
 def get_user_db():
@@ -30,11 +25,8 @@ def get_user_db():
         db = g._database = sqlite3.connect(_DATABASE)
     return db
 
-
-app = create_flask_app()
-
-
 def init_db():
+    print("Initializing database...")
     create_user_schema_sql = """
     DROP TABLE IF EXISTS user;
     CREATE TABLE user(
@@ -43,19 +35,13 @@ def init_db():
         pw_hash TEXT NOT NULL
     );
     """
-    with app.app_context():
-        connection = get_user_db()
-        connection.cursor().executescript(create_user_schema_sql)
-        connection.commit()
-
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
-
+    connection = get_user_db()
+    connection.cursor().executescript(create_user_schema_sql)
+    connection.commit()
+    # with app.app_context():
+    #     connection = get_user_db()
+    #     connection.cursor().executescript(create_user_schema_sql)
+    #     connection.commit()
 def _hash(value: str) -> str:
     m = hashlib.sha1()
     m.update(value.encode('utf-8'))
@@ -74,6 +60,22 @@ def _add_user(con: sqlite3.Connection, username: str, pw_hash: str):
     con.commit()
     user = User(res_id, res_username, res_pw_hash)
     return user
+
+def create_flask_app() -> Flask:
+    app = Flask(__name__, static_url_path='', static_folder="static")
+    with app.app_context():
+        init_db()
+        add_user("alice", "alice-password")
+        add_user("bob", "bob-password")
+    return app
+
+app = create_flask_app()
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
 
 
 def get_authenticated_user(username: str, password: str) -> User:
@@ -127,6 +129,7 @@ def login_user():
         user = get_authenticated_user(username, password)
         return {"id": user.id, "username": user.username}, 200
     except ValueError as e:
+        print(f"Could not log in: {e}")
         return {"error": "Authentication Failed"}, 401
 
 
