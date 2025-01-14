@@ -3,7 +3,7 @@ import os
 import sqlite3
 from pathlib import Path
 
-from flask import Flask, request, g
+from flask import Flask, request, g, make_response
 # from flask_api import status
 from dataclasses import dataclass
 
@@ -85,7 +85,7 @@ def get_authenticated_user(username: str, password: str) -> User:
 
 def _get_authenticated_user(con, username: str, pw_hash: str) -> User:
     res = con.cursor().execute("""
-        SELECT id, username, pw_hash FROM user WHERE username = ? AND pw_hash = ? ;
+        SELECT user_id, username, pw_hash FROM user WHERE username = ? AND pw_hash = ? ;
         """, (username, pw_hash))
     row = res.fetchone()
     if row is not None:
@@ -95,7 +95,7 @@ def _get_authenticated_user(con, username: str, pw_hash: str) -> User:
         raise ValueError("Could not authenticate user.")
 
 def _bad_get_authenticated_user(con, username: str, pw_hash: str):
-    vulnerable_raw_sql ="SELECT id, username, pw_hash FROM user WHERE username = '" + username + "' AND pw_hash = '" + pw_hash + "';"
+    vulnerable_raw_sql ="SELECT user_id, username, pw_hash FROM user WHERE username = '" + username + "' AND pw_hash = '" + pw_hash + "';"
     print(f"Executing vulnerable raw SQL:\n{vulnerable_raw_sql}")
     res = con.cursor().execute(vulnerable_raw_sql)
     row = res.fetchone()
@@ -127,7 +127,10 @@ def login_user():
     password: str = request.form["password"]
     try:
         user = get_authenticated_user(username, password)
-        return {"id": user.id, "username": user.username}, 200
+        res = make_response({"id": user.id, "username": user.username})
+        res.status_code = 200
+        res.set_cookie(key="authenticated", value="true", secure=False, httponly=False)
+        return res
     except ValueError as e:
         print(f"Could not log in: {e}")
         return {"error": "Authentication Failed"}, 401
